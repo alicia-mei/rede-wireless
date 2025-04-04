@@ -1,64 +1,78 @@
-#include <RH_ASK.h>  // Inclui a biblioteca RadioHead para Amplitude Shift Keying
-#include <SPI.h>     // Inclui a biblioteca SPI necessária para a comunicação
+#include <RH_ASK.h>
+#include <SPI.h>
 
-// Configuração do driver de RF para ESP32 com 433MHz (RX: GPIO4, TX: GPIO22)
-RH_ASK rf_driver(1000, 4, 22);  
+// Configuração do driver RH_ASK: (bps, pino RX, pino TX)
+RH_ASK rf_driver(1000, 16, 22);
 
 void setup() {
-  Serial.begin(115200);  // Inicializa o monitor serial a 115200 baud rate
-  delay(4000);  // Atraso inicial para garantir a estabilização do sistema
-  //Serial.println("ESP32 433MHz Transmitter and Receiver");
-
-  // Configura os pinos RX e TX explicitamente para evitar falha de sincronização
-  pinMode(4, INPUT);
+  Serial.begin(115200);
+  delay(4000); // tempo para estabilizar o serial
+  pinMode(16, INPUT);
   pinMode(22, OUTPUT);
-  digitalWrite(22, LOW);  // Define o pino TX como LOW inicialmente para evitar interferência
+  digitalWrite(22, LOW);
 
-  // Inicialização do transmissor e receptor
   if (!rf_driver.init()) {
-    Serial.println("init failed");
-    while (1) delay(10000);  // Se falhar na inicialização, entra em loop
+    Serial.println("Falha ao inicializar o módulo RF");
+    while (1) delay(10000);
   }
-  //Serial.println("rf_driver initialised");
 
-  // Configura o cabeçalho para transmissão
-  rf_driver.setHeaderTo(0xFF);     // Destinatário
-  rf_driver.setHeaderFrom(0x01);   // Remetente
-  rf_driver.setHeaderId(0x01);     // ID da mensagem
-  rf_driver.setHeaderFlags(0x00);  // Sem flags específicas
+  rf_driver.setThisAddress(0x01); // nosso endereço
+  Serial.println("Transmissor RF pronto! Digite sua mensagem:");
 }
 
 void loop() {
-  // **Transmissão** - Envia mensagem a cada 5 segundos
-  
-  //Serial.println("Transmitting packet");
-  const char *msg = "oi debora";  // Mensagem a ser transmitida
-  rf_driver.send((uint8_t *)msg, strlen(msg) + 1);  // Envia a mensagem
-  rf_driver.waitPacketSent();  // Espera até que a transmissão seja concluída
-  //Serial.println("Message Transmitted");
+  if (Serial.available()) {
+    String input = Serial.readStringUntil('\n');
+    input.trim(); // remove espaços em branco
 
-  // **Recepção** - Verifica se há pacotes recebidos e imprime a mensagem recebida
-  uint8_t buf[20] = {0};  // Buffer para armazenar a mensagem recebida
-  uint8_t buflen = sizeof(buf);  // Tamanho do buffer
+    // Envia mensagem
+    rf_driver.setHeaderTo(0xFF);     // broadcast
+    rf_driver.setHeaderFrom(0x01);   // remetente
+    rf_driver.setHeaderId(0x01);     // ID da mensagem
+    rf_driver.setHeaderFlags(0x00);  // sem flags
 
-  // Pequeno atraso para garantir que o receptor esteja pronto
-  delayMicroseconds(100);
+    rf_driver.send((uint8_t *)input.c_str(), input.length() + 1);
+    rf_driver.waitPacketSent();
+    Serial.println("Mensagem transmitida: " + input);
 
-  if (rf_driver.recv(buf, &buflen)) {
-    // Verifica o cabeçalho para garantir que é do endereço correto
-    if (rf_driver.headerFrom() == 0x03) {
-      //Serial.print("Message Received: ");
-      Serial.println((char*)buf);
-      //Serial.print("From: ");
-      //Serial.println(rf_driver.headerFrom(), HEX);
-      //Serial.print("To: ");
-      //Serial.println(rf_driver.headerTo(), HEX);
-    } 
-     else {
-      //Serial.print("Ignored message from wrong address: ");
-      Serial.println(rf_driver.headerFrom(), HEX);
+    // Agora escuta a resposta
+    uint8_t buf[50] = {0};
+    uint8_t buflen = sizeof(buf);
+    uint8_t id = 0xFF;
+
+    unsigned long startTime = millis();
+    const unsigned long timeout = 5000;
+
+    bool respostaRecebida = false;
+
+    while (millis() - startTime < timeout) {
+      //rf_driver.send((uint8_t *)input.c_str(), input.length() + 1);
+      //rf_driver.waitPacketSent();
+      //delay (1000);
+      buflen = sizeof(buf);
+      if (rf_driver.recv(buf, &buflen)) {
+        id = rf_driver.headerFrom();
+        //Serial.print(">> Resposta de 0x");
+        Serial.println(id, HEX);
+        Serial.print(">> Conteúdo: ");
+        Serial.println((char *)buf);
+
+        if (id == 0x02 ) {
+          respostaRecebida = true;
+          break;
+        }
+      }
+      //delay(200); // aguarda antes de tentar novamente
     }
-  } 
+    if (!respostaRecebida) {
+      Serial.println("⚠️");
+    } else {
+      Serial.println("✅");
+    }
+    //Serial.println("----- Fim da transmissão -----\n");
+  }
 
-  delay(250);  // Atraso adicional de 2 segundos antes de tentar novamente
+  delay(500);
 }
+
+
