@@ -42,7 +42,9 @@ void loop() {
   // Pequeno atraso para garantir que o receptor esteja pronto
   delayMicroseconds(100);
 
-
+  for(int i = 0; i<20; i++){
+    buf[i] = 0;
+  }
   if (rf_driver.recv(buf, &buflen)) {
     // Verifica o cabeçalho para garantir que é do endereço correto
     if (rf_driver.headerFrom() == 0x02) {
