@@ -24,19 +24,22 @@ void setup() {
   //rf_driver.setThisAddress(0x02);
   // Configura o cabeçalho para transmissão
   rf_driver.setHeaderTo(0xFF);     // Destinatário
-  rf_driver.setHeaderFrom(0x02);   // Remetente
+  rf_driver.setHeaderFrom(0x02);   // Remetente 
   rf_driver.setHeaderId(0x02);     // ID da mensagem
   rf_driver.setHeaderFlags(0x00);  // Sem flags específicas
+  
 }
 
 
 void loop() {
   // **Recepção** - Verifica se há pacotes recebidos e imprime a mensagem recebida
+  
   uint8_t buf[20] = { 0 };       // Buffer para armazenar a mensagem recebida
   uint8_t buflen = sizeof(buf);  // Tamanho do buffer
+  memset(buf, 0, sizeof(buf));
   // Pequeno atraso para garantir que o receptor esteja pronto
   delayMicroseconds(100);
-  bool respostaRecebida = false;
+  bool respostaRecebida= false;
   if (rf_driver.recv(buf, &buflen)) {
     // Verifica o cabeçalho para garantir que é do endereço correto
     uint8_t id = rf_driver.headerFrom();
@@ -47,10 +50,14 @@ void loop() {
       const char *msg = (char *)buf;  // Mensagem a ser transmitida
       unsigned long startTime = millis();
       const unsigned long timeout = 5000;
+      
       while (millis() - startTime < timeout) {
         //Serial.println("oi");
         rf_driver.send((uint8_t *)msg, strlen(msg) + 1);  // Envia a mensagem
-        rf_driver.waitPacketSent();                       // Espera até que a transmissão seja concluída
+        rf_driver.waitPacketSent(); 
+        memset(buf, 0, sizeof(buf));
+        rf_driver.setModeRx(); 
+         delay(1000);                     // Espera até que a transmissão seja concluída
         if (rf_driver.recv(buf, &buflen)) {
           id = rf_driver.headerFrom();
           //Serial.print(">> Resposta de 0x");
@@ -60,11 +67,15 @@ void loop() {
 
           if (id == 0x03) {
             respostaRecebida = true;
+            memset(buf, 0, sizeof(buf));
             break;
           }
         }
-        delay(500);
+        
       }
+      
+     memset(buf, 0, sizeof(buf));
+
       if (!respostaRecebida) {
         Serial.println("⚠️");
       } else {
