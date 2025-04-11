@@ -36,7 +36,7 @@ void loop() {
   uint8_t buflen = sizeof(buf);  // Tamanho do buffer
   // Pequeno atraso para garantir que o receptor esteja pronto
   delayMicroseconds(100);
-
+  bool respostaRecebida = false;
   if (rf_driver.recv(buf, &buflen)) {
     // Verifica o cabeçalho para garantir que é do endereço correto
     uint8_t id = rf_driver.headerFrom();
