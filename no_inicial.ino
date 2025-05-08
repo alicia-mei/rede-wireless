@@ -1,11 +1,23 @@
 #include <RH_ASK.h>
 #include <SPI.h>
 
+// Definir o pino do ESP32 para gerar PWM
+const int pwmPin = 17;  // É possível escolher outro pino, se necessário
+
 // Configuração do driver RH_ASK: (bps, pino RX, pino TX)
 RH_ASK rf_driver(1000, 16, 22);
 
 void setup() {
   Serial.begin(115200);
+   // Configurar o canal de PWM
+  // ledcSetup canal, frequência, resolução
+  ledcSetup(0, 125000, 8);  // Canal 0, frequência de 125 kHz, resolução de 8 bits (0-255)
+  ledcAttachPin(pwmPin, 0); // Atribui o pino do pwm ao canal 0
+
+  Serial.println("Gerando sinal PWM de 125 kHz...");
+  // Gerar um sinal PWM com ciclo de trabalho de 50% (valor 127 de 0 a 255)
+  ledcWrite(0, 127);  // Valor de 127 representa 50% de ciclo de trabalho (duty cycle)
+
   delay(4000); // tempo para estabilizar o serial
   pinMode(16, INPUT);
   pinMode(22, OUTPUT);
@@ -18,6 +30,7 @@ void setup() {
 
   rf_driver.setThisAddress(0x01); // nosso endereço
   Serial.println("Transmissor RF pronto! Digite sua mensagem:");
+
 }
 
 void loop() {
@@ -74,5 +87,4 @@ void loop() {
 
   delay(500);
 }
-
 
