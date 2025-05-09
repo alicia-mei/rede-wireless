@@ -1,5 +1,12 @@
 #include <RH_ASK.h>  // Inclui a biblioteca RadioHead para Amplitude Shift Keying
 #include <SPI.h>     // Inclui a biblioteca SPI necessária para a comunicação
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <esp_system.h>
+#include <time.h>
+#include <sys/time.h>
+
+struct tm data;//Cria a estrutura que contem as informacoes da data.
 
 // Definir o pino do ESP32 para gerar PWM
 const int pwmPin = 17;  // É possível escolher outro pino, se necessário
@@ -41,13 +48,25 @@ void setup() {
   // Gerar um sinal PWM com ciclo de trabalho de 50% (valor 127 de 0 a 255)
   ledcWrite(0, 127);  // Valor de 127 representa 50% de ciclo de trabalho (duty cycle)
 
+  timeval tv;//Cria a estrutura temporaria para funcao abaixo.
+  tv.tv_sec = 	1746791026;//Atribui minha data atual. Voce pode usar o NTP para isso ou o site citado no artigo!
+  settimeofday(&tv, NULL);//Configura o RTC para manter a data atribuida atualizada. 
 }
 
+String get_time_stamp(){
+  time_t tt = time(NULL);//Obtem o tempo atual em segundos. Utilize isso sempre que precisar obter o tempo atual
+  data = *gmtime(&tt);//Converte o tempo atual e atribui na estrutura
+  
+  char data_formatada[64];
+  strftime(data_formatada, 64, "%d/%m %H:%M", &data);//Cria uma String formatada da estrutura "data"
+
+  return String(data_formatada);
+}
 
 void loop() {
   // **Recepção** - Verifica se há pacotes recebidos e imprime a mensagem recebida
   
-  uint8_t buf[20] = { 0 };       // Buffer para armazenar a mensagem recebida
+  uint8_t buf[50] = { 0 };       // Buffer para armazenar a mensagem recebida
   uint8_t buflen = sizeof(buf);  // Tamanho do buffer
   memset(buf, 0, sizeof(buf));
   // Pequeno atraso para garantir que o receptor esteja pronto
