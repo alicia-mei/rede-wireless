@@ -1,5 +1,12 @@
 #include <RH_ASK.h>
 #include <SPI.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <esp_system.h>
+#include <time.h>
+#include <sys/time.h>
+
+struct tm data;//Cria a estrutura que contem as informacoes da data.
 
 // Definir o pino do ESP32 para gerar PWM
 const int pwmPin = 17;  // É possível escolher outro pino, se necessário
@@ -31,6 +38,19 @@ void setup() {
   rf_driver.setThisAddress(0x01); // nosso endereço
   Serial.println("Transmissor RF pronto! Digite sua mensagem:");
 
+  timeval tv;//Cria a estrutura temporaria para funcao abaixo.
+  tv.tv_sec = 	1746791026;//Atribui minha data atual. Voce pode usar o NTP para isso ou o site citado no artigo!
+  settimeofday(&tv, NULL);//Configura o RTC para manter a data atribuida atualizada.
+}
+
+String get_time_stamp(){
+  time_t tt = time(NULL);//Obtem o tempo atual em segundos. Utilize isso sempre que precisar obter o tempo atual
+  data = *gmtime(&tt);//Converte o tempo atual e atribui na estrutura
+  
+  char data_formatada[64];
+  strftime(data_formatada, 64, "%d/%m %H:%M", &data);//Cria uma String formatada da estrutura "data"
+
+  return String(data_formatada);
 }
 
 void loop() {
@@ -38,15 +58,18 @@ void loop() {
     String input = Serial.readStringUntil('\n');
     input.trim(); // remove espaços em branco
 
+    String timestamp = get_time_stamp();
+    String mensagem = timestamp + " " + input;
+
     // Envia mensagem
     rf_driver.setHeaderTo(0xFF);     // broadcast
     rf_driver.setHeaderFrom(0x01);   // remetente
     rf_driver.setHeaderId(0x01);     // ID da mensagem
     rf_driver.setHeaderFlags(0x00);  // sem flags
 
-    rf_driver.send((uint8_t *)input.c_str(), input.length() + 1);
+    rf_driver.send((uint8_t *)mensagem.c_str(), mensagem.length() + 1);
     rf_driver.waitPacketSent();
-    Serial.println("Mensagem transmitida: " + input);
+    Serial.println("Mensagem transmitida: " + mensagem);
 
     // Agora escuta a resposta
     uint8_t buf[50] = {0};
@@ -87,4 +110,3 @@ void loop() {
 
   delay(500);
 }
-
