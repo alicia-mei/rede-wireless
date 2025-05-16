@@ -2,7 +2,7 @@
 #include <SPI.h>     // Inclui a biblioteca SPI necessária para a comunicação
 
 // Definir o pino do ESP32 para gerar PWM
-const int pwmPin = 17;  // É possível escolher outro pino, se necessário
+const int pwmPin = 22;  // É possível escolher outro pino, se necessário
 // Configuração do driver de RF para ESP32 com 433MHz (RX: GPIO4, TX: GPIO22)
 RH_ASK rf_driver(1000, 4, 22);  
 
