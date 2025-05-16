@@ -9,7 +9,7 @@
 struct tm data;//Cria a estrutura que contem as informacoes da data.
 
 // Definir o pino do ESP32 para gerar PWM
-const int pwmPin = 17;  // É possível escolher outro pino, se necessário
+const int pwmPin = 22;  // É possível escolher outro pino, se necessário
 
 // Configuração do driver RH_ASK: (bps, pino RX, pino TX)
 RH_ASK rf_driver(1000, 16, 22);
