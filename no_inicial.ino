@@ -5,108 +5,159 @@
 #include <esp_system.h>
 #include <time.h>
 #include <sys/time.h>
+#include <ArduinoJson.h>
 
-struct tm data;//Cria a estrutura que contem as informacoes da data.
+
+#define TRIG_PIN 5   // Pino TRIG do sensor ultrassonico
+#define ECHO_PIN 18  // Pino ECHO do sensor ultrassonico
+
+
+struct tm data;  //Cria a estrutura que contem as informacoes da data.
+
 
 // Definir o pino do ESP32 para gerar PWM
 const int pwmPin = 22;  // É possível escolher outro pino, se necessário
 
+
 // Configuração do driver RH_ASK: (bps, pino RX, pino TX)
 RH_ASK rf_driver(1000, 16, 22);
 
+
 void setup() {
   Serial.begin(115200);
-   // Configurar o canal de PWM
-  // ledcSetup canal, frequência, resolução
-  ledcSetup(0, 125000, 8);  // Canal 0, frequência de 125 kHz, resolução de 8 bits (0-255)
-  ledcAttachPin(pwmPin, 0); // Atribui o pino do pwm ao canal 0
-
+  // Configurar o canal de PWM
+  ledcSetup(0, 125000, 8);
+  ledcAttachPin(pwmPin, 0);
   Serial.println("Gerando sinal PWM de 125 kHz...");
-  // Gerar um sinal PWM com ciclo de trabalho de 50% (valor 127 de 0 a 255)
-  ledcWrite(0, 127);  // Valor de 127 representa 50% de ciclo de trabalho (duty cycle)
+  ledcWrite(0, 127);
 
-  delay(4000); // tempo para estabilizar o serial
+
+  delay(4000);
   pinMode(16, INPUT);
   pinMode(22, OUTPUT);
   digitalWrite(22, LOW);
+
+
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
 
   if (!rf_driver.init()) {
     Serial.println("Falha ao inicializar o módulo RF");
     while (1) delay(10000);
   }
 
-  rf_driver.setThisAddress(0x01); // nosso endereço
-  Serial.println("Transmissor RF pronto! Digite sua mensagem:");
 
-  timeval tv;//Cria a estrutura temporaria para funcao abaixo.
-  tv.tv_sec = 	1746791026;//Atribui minha data atual. Voce pode usar o NTP para isso ou o site citado no artigo!
-  settimeofday(&tv, NULL);//Configura o RTC para manter a data atribuida atualizada.
+  rf_driver.setThisAddress(0x01);
+  //Serial.println("Transmissor RF pronto! Digite sua mensagem:");
+
+
+  timeval tv;
+  tv.tv_sec = 1746791026;
+  settimeofday(&tv, NULL);
 }
 
-String get_time_stamp(){
-  time_t tt = time(NULL);//Obtem o tempo atual em segundos. Utilize isso sempre que precisar obter o tempo atual
-  data = *gmtime(&tt);//Converte o tempo atual e atribui na estrutura
-  
-  char data_formatada[64];
-  strftime(data_formatada, 64, "%d/%m %H:%M", &data);//Cria uma String formatada da estrutura "data"
 
+String get_time_stamp() {
+  time_t tt = time(NULL);
+  data = *gmtime(&tt);
+  char data_formatada[64];
+  strftime(data_formatada, 64, "%y-%m-%dT%H:%M", &data);
   return String(data_formatada);
 }
 
+
+float get_distance_cm() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2000);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(4000);
+  digitalWrite(TRIG_PIN, LOW);
+
+
+  long duracao = pulseIn(ECHO_PIN, HIGH, 30000);  // timeout de 30ms
+  if (duracao == 0) return -1;
+
+
+  float distancia = duracao * 0.0343 / 2;
+  return distancia;
+}
+
+
 void loop() {
-  if (Serial.available()) {
-    String input = Serial.readStringUntil('\n');
-    input.trim(); // remove espaços em branco
+ 
+    String time = get_time_stamp();
+   
+   
+    float distancia = get_distance_cm();  // Lê a distância
+    //Serial.print("Distância medida: ");
+    //Serial.print(distancia);
+    //Serial.println(" cm");  // Exibe no monitor serial
+   
+    StaticJsonDocument<200> docOut;
+    docOut["dist_cm"] = get_distance_cm();
+    docOut["timestamp"] = time;
 
-    String timestamp = get_time_stamp();
-    String mensagem = timestamp + " " + input;
 
-    // Envia mensagem
-    rf_driver.setHeaderTo(0xFF);     // broadcast
-    rf_driver.setHeaderFrom(0x01);   // remetente
-    rf_driver.setHeaderId(0x01);     // ID da mensagem
-    rf_driver.setHeaderFlags(0x00);  // sem flags
+    char jsonStr[200];
+    serializeJson(docOut, jsonStr);
 
-    rf_driver.send((uint8_t *)mensagem.c_str(), mensagem.length() + 1);
+
+    rf_driver.setHeaderTo(0xFF);
+    rf_driver.setHeaderFrom(0x01);
+    rf_driver.setHeaderId(0x01);
+    rf_driver.setHeaderFlags(0x00);
+   
+    rf_driver.send((uint8_t *)jsonStr, strlen(jsonStr));
     rf_driver.waitPacketSent();
-    Serial.println("Mensagem transmitida: " + mensagem);
-
-    // Agora escuta a resposta
-    uint8_t buf[50] = {0};
+    Serial.println("Mensagem transmitida: " + String(jsonStr));
+    delay(2000);
+    uint8_t buf[200] = { 0 };
     uint8_t buflen = sizeof(buf);
     uint8_t id = 0xFF;
 
+
     unsigned long startTime = millis();
     const unsigned long timeout = 5000;
-
     bool respostaRecebida = false;
 
+
     while (millis() - startTime < timeout) {
-      //rf_driver.send((uint8_t *)input.c_str(), input.length() + 1);
-      //rf_driver.waitPacketSent();
-      //delay (1000);
       buflen = sizeof(buf);
       if (rf_driver.recv(buf, &buflen)) {
         id = rf_driver.headerFrom();
-        //Serial.print(">> Resposta de 0x");
         Serial.println(id, HEX);
-        Serial.print(">> Conteúdo: ");
-        Serial.println((char *)buf);
 
+
+        StaticJsonDocument<200> doc;
+        DeserializationError error = deserializeJson(doc, (char *)buf);
+        float distancia = -999;
+        String timestamp = "erro";
+        if (!error) {
+          distancia = doc["dist_cm"] | -999;
+          timestamp = doc["timestamp"] | "erro";
+        }
+        Serial.printf(">> Conteúdo: %s dist: %.2f cm\n", timestamp.c_str(), distancia);
+        Serial.print(time);
+        Serial.print(timestamp);
         if (id == 0x02 ) {
           respostaRecebida = true;
           break;
         }
       }
-      //delay(200); // aguarda antes de tentar novamente
     }
+
+
     if (!respostaRecebida) {
       Serial.println("⚠️");
     } else {
       Serial.println("✅");
     }
-    //Serial.println("----- Fim da transmissão -----\n");
-  }
+ 
+
 
   delay(500);
 }
+
+
+
