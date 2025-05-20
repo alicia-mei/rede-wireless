@@ -7,6 +7,9 @@
 #include <sys/time.h>
 #include <ArduinoJson.h>
 
+#define TRIG_PIN 5   // Pino TRIG do sensor ultrassonico
+#define ECHO_PIN 18  // Pino ECHO do sensor ultrassonico
+
 struct tm data;
 
 const int pwmPin = 22;  // Pino para sinal PWM
@@ -23,6 +26,9 @@ void setup() {
   pinMode(4, INPUT);
   pinMode(22, OUTPUT);
   digitalWrite(22, LOW);
+
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
 
   if (!rf_driver.init()) {
     while (1) delay(10000);  // Loop infinito se falhar
