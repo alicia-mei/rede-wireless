@@ -49,6 +49,23 @@ String get_time_stamp() {
   return String(data_formatada);
 }
 
+
+float get_distance_cm() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2000);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(4000);
+  digitalWrite(TRIG_PIN, LOW);
+
+
+  long duracao = pulseIn(ECHO_PIN, HIGH, 30000);  // timeout de 30ms
+  if (duracao == 0) return -1;
+
+
+  float distancia = duracao * 0.0343 / 2;
+  return distancia;
+}
+
 void loop() {
   // **Recepção** - Verifica se há pacotes recebidos e imprime a mensagem recebida
   uint8_t buf[20] = {0};  // Buffer para armazenar a mensagem recebida
