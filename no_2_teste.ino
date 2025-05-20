@@ -1,119 +1,116 @@
-#include <RH_ASK.h>  // Inclui a biblioteca RadioHead para Amplitude Shift Keying
-#include <SPI.h>     // Inclui a biblioteca SPI necessária para a comunicação
+#include <RH_ASK.h>  // Biblioteca RadioHead para ASK
+#include <SPI.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_system.h>
 #include <time.h>
 #include <sys/time.h>
+#include <ArduinoJson.h>
 
-struct tm data;//Cria a estrutura que contem as informacoes da data.
+struct tm data;
 
-// Definir o pino do ESP32 para gerar PWM
-const int pwmPin = 22;  // É possível escolher outro pino, se necessário
-// Configuração do driver de RF para ESP32 com 433MHz (RX: GPIO4, TX: GPIO22)
-RH_ASK rf_driver(1000, 4, 22);
+const int pwmPin = 22;  // Pino para sinal PWM
+RH_ASK rf_driver(1000, 4, 22);  // bit rate, RX, TX
 
 void setup() {
-  Serial.begin(115200);  // Inicializa o monitor serial a 115200 baud rate
-  // Configurar o canal de PWM
-  // ledcSetup canal, frequência, resolução
-  ledcSetup(0, 125000, 8);  // Canal 0, frequência de 125 kHz, resolução de 8 bits (0-255)
- 
-  // Atribuir o pino ao canal de PWM
-  ledcAttachPin(pwmPin, 0); // Atribui o pino ao canal 0
+  Serial.begin(115200);
 
+  ledcSetup(0, 125000, 8);      // Canal 0, 125 kHz, 8 bits
+  ledcAttachPin(pwmPin, 0);     // Pino 22 no canal 0
   Serial.println("Gerando sinal PWM de 125 kHz...");
-  
-  delay(4000);           // Atraso inicial para garantir a estabilização do sistema
-  //Serial.println("ESP32 433MHz Transmitter and Receiver");
+  delay(4000);
 
-  // Configura os pinos RX e TX explicitamente para evitar falha de sincronização
   pinMode(4, INPUT);
   pinMode(22, OUTPUT);
-  digitalWrite(22, LOW);  // Define o pino TX como LOW inicialmente para evitar interferência
+  digitalWrite(22, LOW);
 
-  // Inicialização do transmissor e receptor
   if (!rf_driver.init()) {
-    //Serial.println("init failed");
-    while (1) delay(10000);  // Se falhar na inicialização, entra em loop
+    while (1) delay(10000);  // Loop infinito se falhar
   }
-  //Serial.println("rf_driver initialised");
 
-  //rf_driver.setThisAddress(0x02);
-  // Configura o cabeçalho para transmissão
-  rf_driver.setHeaderTo(0xFF);     // Destinatário
-  rf_driver.setHeaderFrom(0x02);   // Remetente 
-  rf_driver.setHeaderId(0x02);     // ID da mensagem
-  rf_driver.setHeaderFlags(0x00);  // Sem flags específicas
-  // Gerar um sinal PWM com ciclo de trabalho de 50% (valor 127 de 0 a 255)
-  ledcWrite(0, 127);  // Valor de 127 representa 50% de ciclo de trabalho (duty cycle)
+  rf_driver.setHeaderTo(0xFF);
+  rf_driver.setHeaderFrom(0x02);
+  rf_driver.setHeaderId(0x02);
+  rf_driver.setHeaderFlags(0x00);
 
-  timeval tv;//Cria a estrutura temporaria para funcao abaixo.
-  tv.tv_sec = 	1746791026;//Atribui minha data atual. Voce pode usar o NTP para isso ou o site citado no artigo!
-  settimeofday(&tv, NULL);//Configura o RTC para manter a data atribuida atualizada. 
+  ledcWrite(0, 127);  // 50% duty cycle
+
+  timeval tv;
+  tv.tv_sec = 1746791026;  // Timestamp fixo
+  settimeofday(&tv, NULL);
 }
 
-String get_time_stamp(){
-  time_t tt = time(NULL);//Obtem o tempo atual em segundos. Utilize isso sempre que precisar obter o tempo atual
-  data = *gmtime(&tt);//Converte o tempo atual e atribui na estrutura
-  
-  char data_formatada[64];
-  strftime(data_formatada, 64, "%d/%m %H:%M", &data);//Cria uma String formatada da estrutura "data"
+String get_time_stamp() {
+  time_t tt = time(NULL);
+  data = *gmtime(&tt);
 
+  char data_formatada[64];
+  strftime(data_formatada, 64, "%y-%m-%dT%H:%M", &data);
   return String(data_formatada);
 }
 
 void loop() {
-  // **Recepção** - Verifica se há pacotes recebidos e imprime a mensagem recebida
-  
-  uint8_t buf[50] = { 0 };       // Buffer para armazenar a mensagem recebida
-  uint8_t buflen = sizeof(buf);  // Tamanho do buffer
-  memset(buf, 0, sizeof(buf));
-  // Pequeno atraso para garantir que o receptor esteja pronto
+  uint8_t buf[50] = { 0 };
+  uint8_t buflen = sizeof(buf);
   delayMicroseconds(100);
-  bool respostaRecebida= false;
+
   if (rf_driver.recv(buf, &buflen)) {
-    // Verifica o cabeçalho para garantir que é do endereço correto
     uint8_t id = rf_driver.headerFrom();
     if (id == 0x01) {
-      Serial.println(rf_driver.headerFrom(), HEX);
-      Serial.println((char *)buf);
-      // **Transmissão**
-      const char *msg = (char *)buf;  // Mensagem a ser transmitida
+      Serial.printf("Recebido de ID %02X: %s\n", id, (char*)buf);
+
+      const char *msg = (char *)buf;
       unsigned long startTime = millis();
       const unsigned long timeout = 5000;
-      
+
+      StaticJsonDocument<200> doc;
+      DeserializationError error = deserializeJson(doc, (char *)buf);
+      float dist = -999;
+      String timestamp = "erro";
+
+      if (!error) {
+        dist = doc["dist_cm"];
+        Serial.println(dist);
+        timestamp = doc["timestamp"] | "erro";
+      }
+
+      String originalTime = timestamp;
+      bool respostaRecebida = false;
+
       while (millis() - startTime < timeout) {
-        //Serial.println("oi");
-        rf_driver.send((uint8_t *)msg, strlen(msg) + 1);  // Envia a mensagem
-        rf_driver.waitPacketSent(); 
-        memset(buf, 0, sizeof(buf));
-        rf_driver.setModeRx(); 
-         delay(1000);                     // Espera até que a transmissão seja concluída
+        rf_driver.send((uint8_t *)msg, strlen(msg) + 1);
+        rf_driver.waitPacketSent();
+        Serial.println(msg);
+        rf_driver.setModeRx();
+        delay(1000);
+
         if (rf_driver.recv(buf, &buflen)) {
           id = rf_driver.headerFrom();
-          //Serial.print(">> Resposta de 0x");
-          Serial.println(id, HEX);
-          Serial.print(">> Conteúdo: ");
-          Serial.println((char *)buf);
+          StaticJsonDocument<200> docResp;
+          DeserializationError errorResp = deserializeJson(docResp, (char *)buf);
+          float distResp = -999;
+          String timestampResp = "erro";
 
+          if (!errorResp) {
+            distResp = docResp["dist_cm"] | -999;
+            timestampResp = docResp["timestamp"] | "erro";
+          }
+
+          Serial.printf(">> Conteúdo: dist: %.2f, timestamp: %s\n", distResp, timestampResp.c_str());
           if (id == 0x03) {
             respostaRecebida = true;
-            memset(buf, 0, sizeof(buf));
             break;
           }
         }
-        
       }
-      
-     memset(buf, 0, sizeof(buf));
 
       if (!respostaRecebida) {
-        Serial.println("⚠️");
+        Serial.println("⚠️ Sem resposta correspondente");
       } else {
-        Serial.println("✅");
+        Serial.println("✅ Resposta confirmada");
       }
     }
   }
-  delay(250);
+
+  delay(500);
 }
