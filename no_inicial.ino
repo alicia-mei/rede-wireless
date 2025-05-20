@@ -20,7 +20,7 @@ const int pwmPin = 22;  // É possível escolher outro pino, se necessário
 
 
 // Configuração do driver RH_ASK: (bps, pino RX, pino TX)
-RH_ASK rf_driver(1000, 16, 22);
+RH_ASK rf_driver(1000, 4, 22);
 
 
 void setup() {
