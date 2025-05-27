@@ -35,8 +35,8 @@ void setup() {
   }
 
   rf_driver.setHeaderTo(0xFF);
-  rf_driver.setHeaderFrom(0x02);
-  rf_driver.setHeaderId(0x02);
+  rf_driver.setHeaderFrom(0x03);
+  rf_driver.setHeaderId(0x03);
   rf_driver.setHeaderFlags(0x00);
 
   ledcWrite(0, 127);  // 50% duty cycle
