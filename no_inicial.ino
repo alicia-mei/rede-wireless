@@ -7,56 +7,83 @@
 #include <sys/time.h>
 #include <ArduinoJson.h>
 
+// Pinos do sensor ultrassônico
+#define TRIG_PIN 5
+#define ECHO_PIN 18
 
-#define TRIG_PIN 5   // Pino TRIG do sensor ultrassonico
-#define ECHO_PIN 18  // Pino ECHO do sensor ultrassonico
+// PWM controlado por interrupção
+const int inputPin = 16;
+const int pwmPin = 17;  // PWM no pino 17
+const int pwmChannel = 0;
+const int pwmFreq = 125000;
+const int pwmResolution = 8;
 
-
-struct tm data;  //Cria a estrutura que contem as informacoes da data.
-
-
-// Definir o pino do ESP32 para gerar PWM
-const int pwmPin = 22;  // É possível escolher outro pino, se necessário
-
-
-// Configuração do driver RH_ASK: (bps, pino RX, pino TX)
+// Driver RF: (bps, RX, TX)
 RH_ASK rf_driver(1000, 4, 22);
+
+// Estrutura de data
+struct tm data;
+
+
+void TaskPWMControl(void *pvParameters) {
+  (void)pvParameters;
+  pinMode(inputPin, INPUT);  // Garante que está como entrada
+
+  while (true) {
+    bool inputHigh = digitalRead(inputPin);
+
+    if (inputHigh) {
+      ledcWrite(pwmChannel, 127);  // 50% duty (ativa PWM)
+    } else {
+      ledcWrite(pwmChannel, 0);  // Desliga PWM
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(1));  // Verifica a cada 1 ms
+  }
+}
 
 
 void setup() {
   Serial.begin(115200);
-  // Configurar o canal de PWM
-  ledcSetup(0, 125000, 8);
-  ledcAttachPin(pwmPin, 0);
-  Serial.println("Gerando sinal PWM de 125 kHz...");
-  ledcWrite(0, 127);
 
+  // Configura pino 16 como entrada com interrupção
+  pinMode(inputPin, INPUT);
 
-  delay(4000);
-  pinMode(16, INPUT);
+  // PWM no pino 17
+  ledcSetup(pwmChannel, pwmFreq, pwmResolution);
+  ledcAttachPin(pwmPin, pwmChannel);
+  ledcWrite(pwmChannel, 0);  // Começa desligado
+
+  // Pino 22 como saída digital normal
   pinMode(22, OUTPUT);
   digitalWrite(22, LOW);
 
-
+  // Sensor ultrassônico
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
 
-
+  // Inicializa RF
   if (!rf_driver.init()) {
     Serial.println("Falha ao inicializar o módulo RF");
     while (1) delay(10000);
   }
-
-
   rf_driver.setThisAddress(0x01);
-  //Serial.println("Transmissor RF pronto! Digite sua mensagem:");
 
-
+  // Ajusta horário inicial
   timeval tv;
   tv.tv_sec = 1746791026;
   settimeofday(&tv, NULL);
-}
 
+  xTaskCreatePinnedToCore(
+  TaskPWMControl,  // Função da task
+  "PWM Control",   // Nome
+  2048,            // Stack size
+  NULL,            // Param
+  1,               // Prioridade
+  NULL,            // Handle (opcional)
+  0                // Core (0 ou 1)
+); 
+}
 
 String get_time_stamp() {
   time_t tt = time(NULL);
@@ -66,7 +93,6 @@ String get_time_stamp() {
   return String(data_formatada);
 }
 
-
 float get_distance_cm() {
   digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2000);
@@ -74,90 +100,57 @@ float get_distance_cm() {
   delayMicroseconds(4000);
   digitalWrite(TRIG_PIN, LOW);
 
-
-  long duracao = pulseIn(ECHO_PIN, HIGH, 30000);  // timeout de 30ms
+  long duracao = pulseIn(ECHO_PIN, HIGH, 30000);
   if (duracao == 0) return -1;
-
-
-  float distancia = duracao * 0.0343 / 2;
-  return distancia;
+  return duracao * 0.0343 / 2;
 }
 
-
 void loop() {
- 
-    String time = get_time_stamp();
-   
-   
-    float distancia = get_distance_cm();  // Lê a distância
-    //Serial.print("Distância medida: ");
-    //Serial.print(distancia);
-    //Serial.println(" cm");  // Exibe no monitor serial
-   
-    StaticJsonDocument<200> docOut;
-    docOut["dist_cm"] = get_distance_cm();
-    docOut["timestamp"] = time;
+  String time = get_time_stamp();
+  float distancia = get_distance_cm();
 
+  // Cria JSON com distância e timestamp
+  StaticJsonDocument<200> docOut;
+  docOut["dist_cm"] = distancia;
+  docOut["timestamp"] = time;
 
-    char jsonStr[200];
-    serializeJson(docOut, jsonStr);
+  char jsonStr[200];
+  serializeJson(docOut, jsonStr);
 
+  rf_driver.setHeaderTo(0xFF);
+  rf_driver.setHeaderFrom(0x01);
+  rf_driver.setHeaderId(0x01);
+  rf_driver.setHeaderFlags(0x00);
 
-    rf_driver.setHeaderTo(0xFF);
-    rf_driver.setHeaderFrom(0x01);
-    rf_driver.setHeaderId(0x01);
-    rf_driver.setHeaderFlags(0x00);
-   
-    rf_driver.send((uint8_t *)jsonStr, strlen(jsonStr));
-    rf_driver.waitPacketSent();
-    Serial.println("Mensagem transmitida: " + String(jsonStr));
-    delay(2000);
-    uint8_t buf[200] = { 0 };
-    uint8_t buflen = sizeof(buf);
-    uint8_t id = 0xFF;
+  rf_driver.send((uint8_t *)jsonStr, strlen(jsonStr));
+  rf_driver.waitPacketSent();
+  Serial.println("Mensagem transmitida: " + String(jsonStr));
 
+  // Aguarda resposta
+  uint8_t buf[200] = { 0 };
+  uint8_t buflen = sizeof(buf);
+  uint8_t id = 0xFF;
+  bool respostaRecebida = false;
+  unsigned long startTime = millis();
 
-    unsigned long startTime = millis();
-    const unsigned long timeout = 5000;
-    bool respostaRecebida = false;
-
-
-    while (millis() - startTime < timeout) {
-      buflen = sizeof(buf);
-      if (rf_driver.recv(buf, &buflen)) {
-        id = rf_driver.headerFrom();
-        Serial.println(id, HEX);
-
-
-        StaticJsonDocument<200> doc;
-        DeserializationError error = deserializeJson(doc, (char *)buf);
-        float distancia = -999;
-        String timestamp = "erro";
-        if (!error) {
-          distancia = doc["dist_cm"] | -999;
-          timestamp = doc["timestamp"] | "erro";
-        }
-        Serial.printf(">> Conteúdo: %s dist: %.2f cm\n", timestamp.c_str(), distancia);
-        Serial.print(time);
-        Serial.print(timestamp);
-        if (id == 0x02 ) {
+  while (millis() - startTime < 5000) {
+    buflen = sizeof(buf);
+    if (rf_driver.recv(buf, &buflen)) {
+      id = rf_driver.headerFrom();
+      StaticJsonDocument<200> doc;
+      DeserializationError error = deserializeJson(doc, (char *)buf);
+      if (!error) {
+        float distRx = doc["dist_cm"] | -999;
+        String timestampRx = doc["timestamp"] | "erro";
+        Serial.printf(">> Conteúdo: %s dist: %.2f cm\n", timestampRx.c_str(), distRx);
+        if (id == 0x02) {
           respostaRecebida = true;
           break;
         }
       }
     }
+  }
 
-
-    if (!respostaRecebida) {
-      Serial.println("⚠️");
-    } else {
-      Serial.println("✅");
-    }
- 
-
-
+  Serial.println(respostaRecebida ? "✅" : "⚠️");
   delay(500);
 }
-
-
-
