@@ -14,7 +14,7 @@ const int inputPin = 16;
 const int pwmPin = 17;  // PWM no pino 17
 const int pwmChannel = 0;
 const int pwmFreq = 125000;
-const int pwmResolution = 8;
+const int pwmResolution = 8
 
 RH_ASK rf_driver(1000, 4, 22);  // bit rate, RX, TX
 
@@ -45,7 +45,8 @@ void setup() {
   ledcSetup(pwmChannel, pwmFreq, pwmResolution);
   ledcAttachPin(pwmPin, pwmChannel);
   ledcWrite(pwmChannel, 0);  // Começa desligado
-
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
   pinMode(4, INPUT);
   pinMode(22, OUTPUT);
   digitalWrite(22, LOW);
@@ -75,7 +76,19 @@ void setup() {
     0                // Core (0 ou 1)
   );
 }
+float get_distance_cm() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2000);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(4000);
+  digitalWrite(TRIG_PIN, LOW);
 
+  long duracao = pulseIn(ECHO_PIN, HIGH, 30000);  // timeout de 30ms
+  if (duracao == 0) return -1;
+
+  float distancia = duracao * 0.0343 / 2;
+  return distancia;
+}
 String get_time_stamp() {
   time_t tt = time(NULL);
   data = *gmtime(&tt);
@@ -144,9 +157,75 @@ void loop() {
         Serial.println("⚠️ Sem resposta correspondente");
       } else {
         Serial.println("✅ Resposta confirmada");
+        delay(250);
+        rf_driver.setHeaderFrom(0x02);
+        // se a confimação do 3 for recebida, 2 envia seus dados próprios
+
+        String time2 = get_time_stamp();
+        float distancia2 = get_distance_cm();  // Lê a distância
+
+        StaticJsonDocument<200> docOut;
+        docOut["dist_cm"] = distancia2;
+        docOut["timestamp"] = time2;
+
+        char jsonStr[200];
+        serializeJson(docOut, jsonStr); 
+        
+        const char *msg2=(char*)jsonStr;
+        rf_driver.send((uint8_t *)msg2, strlen(msg2) + 1);
+        rf_driver.waitPacketSent();
+        Serial.println("Mensagem transmitida: " + String(msg2));
+        delay(1000);
+        uint8_t buf2[200] = { 0 };
+        uint8_t buflen2 = sizeof(buf2);
+        uint8_t id2 = 0x02;
+
+
+        unsigned long startTime2 = millis();
+        const unsigned long timeout2 = 10000;
+        bool respostaRecebida2 = false;
+
+
+        while (millis() - startTime2 < timeout2) {
+           rf_driver.send((uint8_t *)msg2, strlen(msg2) + 1);
+            rf_driver.waitPacketSent();
+            Serial.println("Mensagem transmitida: " + String(msg2));
+          buflen2 = sizeof(buf2);
+          if (rf_driver.recv(buf2, &buflen2)) {
+            id2 = rf_driver.headerFrom();
+            Serial.println(id2, HEX);
+           
+
+            StaticJsonDocument<200> doc;
+            DeserializationError error = deserializeJson(doc, (char *)buf2);
+            float dist2 = -999;
+            String timestamp2 = "erro";
+
+            if (!error) {
+              dist2 = doc["dist_cm"] | -999;
+              timestamp2 = doc["timestamp"] | "erro";
+            }
+
+            if (id2 == 0x03) {
+              Serial.printf(">> Conteúdo: %s dist: %.2f cm\n", timestamp.c_str(), dist2);
+              Serial.print(time2);
+              Serial.print(timestamp2);
+              respostaRecebida2 = true;
+              break;
+            }
+          }
+        }
+
+
+        if (!respostaRecebida2) {
+          Serial.println("❌");
+        } else {
+          Serial.println("✔");
+        }
+      }
       }
     }
   }
 
   delay(500);
-}
+}  
