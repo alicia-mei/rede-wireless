@@ -8,13 +8,14 @@
 #include <ArduinoJson.h>
 
 struct tm data;
-
+#define TRIG_PIN 5   // Pino TRIG do sensor ultrassonico
+#define ECHO_PIN 18  // Pino ECHO do sensor ultrassonico
 // PWM controlado por interrupção
 const int inputPin = 16;
 const int pwmPin = 17;  // PWM no pino 17
 const int pwmChannel = 0;
 const int pwmFreq = 125000;
-const int pwmResolution = 8
+const int pwmResolution = 8;
 
 RH_ASK rf_driver(1000, 4, 22);  // bit rate, RX, TX
 
@@ -37,8 +38,8 @@ void TaskPWMControl(void *pvParameters) {
 
 void setup() {
   Serial.begin(115200);
-  
-   // Configura pino 16 como entrada com interrupção
+
+  // Configura pino 16 como entrada com interrupção
   pinMode(inputPin, INPUT);
 
   // PWM no pino 17
@@ -106,7 +107,7 @@ void loop() {
   if (rf_driver.recv(buf, &buflen)) {
     uint8_t id = rf_driver.headerFrom();
     if (id == 0x01) {
-      Serial.printf("Recebido de ID %02X: %s\n", id, (char*)buf);
+      Serial.printf("Recebido de ID %02X: %s\n", id, (char *)buf);
 
       const char *msg = (char *)buf;
       unsigned long startTime = millis();
@@ -169,16 +170,17 @@ void loop() {
         docOut["timestamp"] = time2;
 
         char jsonStr[200];
-        serializeJson(docOut, jsonStr); 
-        
-        const char *msg2=(char*)jsonStr;
+        serializeJson(docOut, jsonStr);
+
+        const char *msg2 = (char *)jsonStr;
         rf_driver.send((uint8_t *)msg2, strlen(msg2) + 1);
         rf_driver.waitPacketSent();
+         rf_driver.setModeRx();  
         Serial.println("Mensagem transmitida: " + String(msg2));
-        delay(1000);
+        delay(3000);
         uint8_t buf2[200] = { 0 };
         uint8_t buflen2 = sizeof(buf2);
-        uint8_t id2 = 0x02;
+        uint8_t id2;
 
 
         unsigned long startTime2 = millis();
@@ -187,14 +189,14 @@ void loop() {
 
 
         while (millis() - startTime2 < timeout2) {
-           rf_driver.send((uint8_t *)msg2, strlen(msg2) + 1);
-            rf_driver.waitPacketSent();
-            Serial.println("Mensagem transmitida: " + String(msg2));
+          rf_driver.send((uint8_t *)msg2, strlen(msg2) + 1);
+          rf_driver.waitPacketSent();
+          Serial.println("Mensagem transmitida: " + String(msg2));
           buflen2 = sizeof(buf2);
           if (rf_driver.recv(buf2, &buflen2)) {
             id2 = rf_driver.headerFrom();
             Serial.println(id2, HEX);
-           
+
 
             StaticJsonDocument<200> doc;
             DeserializationError error = deserializeJson(doc, (char *)buf2);
@@ -223,9 +225,7 @@ void loop() {
           Serial.println("✔");
         }
       }
-      }
     }
   }
-
   delay(500);
-}  
+}
