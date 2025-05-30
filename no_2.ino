@@ -14,7 +14,7 @@ const int inputPin = 16;
 const int pwmPin = 17;  // PWM no pino 17
 const int pwmChannel = 0;
 const int pwmFreq = 125000;
-const int pwmResolution = 8
+const int pwmResolution = 8;
 
 RH_ASK rf_driver(1000, 4, 22);  // bit rate, RX, TX
 
