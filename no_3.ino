@@ -10,18 +10,44 @@
 #define TRIG_PIN 5   // Pino TRIG do sensor ultrassonico
 #define ECHO_PIN 18  // Pino ECHO do sensor ultrassonico
 
+// PWM controlado por interrupção
+const int inputPin = 16;
+const int pwmPin = 17;  // PWM no pino 17
+const int pwmChannel = 0;
+const int pwmFreq = 125000;
+const int pwmResolution = 8;
+
 struct tm data;
 
-const int pwmPin = 22;  // Pino para sinal PWM
 RH_ASK rf_driver(1000, 4, 22);  // bit rate, RX, TX
+
+void TaskPWMControl(void *pvParameters) {
+  (void)pvParameters;
+  pinMode(inputPin, INPUT);  // Garante que está como entrada
+
+  while (true) {
+    bool inputHigh = digitalRead(inputPin);
+
+    if (inputHigh) {
+      ledcWrite(pwmChannel, 127);  // 50% duty (ativa PWM)
+    } else {
+      ledcWrite(pwmChannel, 0);  // Desliga PWM
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(1));  // Verifica a cada 1 ms
+  }
+}
 
 void setup() {
   Serial.begin(115200);
 
-  ledcSetup(0, 125000, 8);      // Canal 0, 125 kHz, 8 bits
-  ledcAttachPin(pwmPin, 0);     // Pino 22 no canal 0
-  Serial.println("Gerando sinal PWM de 125 kHz...");
-  delay(4000);
+  // Configura pino 16 como entrada com interrupção
+  pinMode(inputPin, INPUT);
+
+  // PWM no pino 17
+  ledcSetup(pwmChannel, pwmFreq, pwmResolution);
+  ledcAttachPin(pwmPin, pwmChannel);
+  ledcWrite(pwmChannel, 0);  // Começa desligado
 
   pinMode(4, INPUT);
   pinMode(22, OUTPUT);
@@ -44,6 +70,16 @@ void setup() {
   timeval tv;
   tv.tv_sec = 1746791026;  // Timestamp fixo
   settimeofday(&tv, NULL);
+
+  xTaskCreatePinnedToCore(
+    TaskPWMControl,  // Função da task
+    "PWM Control",   // Nome
+    2048,            // Stack size
+    NULL,            // Param
+    1,               // Prioridade
+    NULL,            // Handle (opcional)
+    0                // Core (0 ou 1)
+  );
 }
 
 String get_time_stamp() {
