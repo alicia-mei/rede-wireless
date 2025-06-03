@@ -132,7 +132,7 @@ void loop() {
         rf_driver.waitPacketSent();
         Serial.println(msg);
         rf_driver.setModeRx();
-        delay(1000);
+        delay(2000);
 
         if (rf_driver.recv(buf, &buflen)) {
           id = rf_driver.headerFrom();
@@ -146,7 +146,7 @@ void loop() {
             timestampResp = docResp["timestamp"] | "erro";
           }
 
-          Serial.printf(">> Conteúdo: dist: %.2f, timestamp: %s\n", distResp, timestampResp.c_str());
+          //Serial.printf(">> Conteúdo: dist: %.2f, timestamp: %s\n", distResp, timestampResp.c_str());
           if (id == 0x03) {
             respostaRecebida = true;
             break;
@@ -177,7 +177,7 @@ void loop() {
         rf_driver.waitPacketSent();
          rf_driver.setModeRx();  
         Serial.println("Mensagem transmitida: " + String(msg2));
-        delay(3000);
+        delay(10000);
         uint8_t buf2[200] = { 0 };
         uint8_t buflen2 = sizeof(buf2);
         uint8_t id2;
@@ -189,10 +189,11 @@ void loop() {
 
 
         while (millis() - startTime2 < timeout2) {
-          rf_driver.send((uint8_t *)msg2, strlen(msg2) + 1);
-          rf_driver.waitPacketSent();
-          Serial.println("Mensagem transmitida: " + String(msg2));
+          //rf_driver.send((uint8_t *)msg2, strlen(msg2) + 1);
+          //rf_driver.waitPacketSent();
+          //Serial.println("Mensagem transmitida: " + String(msg2));
           buflen2 = sizeof(buf2);
+          delay(3000);
           if (rf_driver.recv(buf2, &buflen2)) {
             id2 = rf_driver.headerFrom();
             Serial.println(id2, HEX);
