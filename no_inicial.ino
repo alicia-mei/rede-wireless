@@ -152,5 +152,5 @@ void loop() {
   }
 
   Serial.println(respostaRecebida ? "✅" : "⚠️");
-  delay(500);
+  delay(30000);
 }
