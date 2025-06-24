@@ -1,3 +1,4 @@
+
 #include <RH_ASK.h>
 #include <SPI.h>
 #include <freertos/FreeRTOS.h>
@@ -6,7 +7,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <ArduinoJson.h>
-
+#include <esp_sleep.h>
 // Pinos do sensor ultrassônico
 #define TRIG_PIN 5
 #define ECHO_PIN 18
@@ -146,11 +147,15 @@ void loop() {
         if (id == 0x02) {
           respostaRecebida = true;
           break;
+          esp_sleep_enable_timer_wakeup(10 * 1000000);  // 30 segundos em microssegundos
+          esp_light_sleep_start();
         }
       }
     }
   }
 
   Serial.println(respostaRecebida ? "✅" : "⚠️");
-  delay(30000);
+  
+  
+
 }
