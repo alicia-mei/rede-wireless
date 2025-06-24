@@ -6,7 +6,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <ArduinoJson.h>
-
+#include <esp_sleep.h>
 #define TRIG_PIN 5   // Pino TRIG do sensor ultrassonico
 #define ECHO_PIN 18  // Pino ECHO do sensor ultrassonico
 
@@ -139,11 +139,11 @@ void loop() {
       Serial.printf(">> Conteúdo: dist: %.2f, timestamp: %s\n", dist, timestamp.c_str());
       rf_driver.send((uint8_t *)msg, strlen(msg) + 1);  // Envia a mensagem
       rf_driver.waitPacketSent();  // Espera até que a transmissão seja concluída
+      esp_sleep_enable_timer_wakeup(10 * 1000000);  // 30 segundos em microssegundos
+      esp_light_sleep_start();
 
     } else {
       Serial.println(rf_driver.headerFrom(), HEX); 
     }
   }
-  //else { }
-  delay(250);
 }
