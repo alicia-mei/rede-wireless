@@ -110,7 +110,7 @@ float get_distance_cm() {
 
 void loop() {
   // **Recepção** - Verifica se há pacotes recebidos e imprime a mensagem recebida
-  uint8_t buf[20] = {0};  // Buffer para armazenar a mensagem recebida
+  uint8_t buf[100] = {0};  // Buffer para armazenar a mensagem recebida
   uint8_t buflen = sizeof(buf);  // Tamanho do buffer
   // Pequeno atraso para garantir que o receptor esteja pronto
   delayMicroseconds(100);
