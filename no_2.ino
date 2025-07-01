@@ -158,7 +158,7 @@ void loop() {
         Serial.println("⚠️ Sem resposta correspondente");
       } else {
         Serial.println("✅ Resposta confirmada");
-        delay(250);
+        delay(10000);
         rf_driver.setHeaderFrom(0x02);
         // se a confimação do 3 for recebida, 2 envia seus dados próprios
 
@@ -177,7 +177,7 @@ void loop() {
         rf_driver.waitPacketSent();
          rf_driver.setModeRx();  
         Serial.println("Mensagem transmitida: " + String(msg2));
-        delay(10000);
+        
         uint8_t buf2[200] = { 0 };
         uint8_t buflen2 = sizeof(buf2);
         uint8_t id2;
@@ -216,8 +216,6 @@ void loop() {
               respostaRecebida2 = true;
           
               break;
-               esp_sleep_enable_timer_wakeup(10 * 1000000);  // 30 segundos em microssegundos
-               esp_light_sleep_start();
             }
           }
         }
@@ -227,6 +225,8 @@ void loop() {
           Serial.println("❌");
         } else {
           Serial.println("✔");
+          esp_sleep_enable_timer_wakeup(10 * 1000000);  // 30 segundos em microssegundos
+          esp_light_sleep_start();
         }
       }
     }
