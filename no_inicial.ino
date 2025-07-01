@@ -147,14 +147,15 @@ void loop() {
         if (id == 0x02) {
           respostaRecebida = true;
           break;
-          esp_sleep_enable_timer_wakeup(10 * 1000000);  // 30 segundos em microssegundos
-          esp_light_sleep_start();
+          
         }
       }
     }
   }
 
   Serial.println(respostaRecebida ? "✅" : "⚠️");
+  esp_sleep_enable_timer_wakeup(30 * 1000000);  // 30 segundos em microssegundos
+          esp_light_sleep_start();
   
   
 
