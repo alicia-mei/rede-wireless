@@ -205,16 +205,16 @@ void loop() {
             String timestamp2 = "erro";
 
             if (!error) {
-              dist2 = doc["dist_cm"] | -999;
+              dist2 = doc["dist_cm"];
               timestamp2 = doc["timestamp"] | "erro";
             }
 
             if (id2 == 0x03) {
-              Serial.printf(">> Conteúdo: %s dist: %.2f cm\n", timestamp.c_str(), dist2);
+              Serial.printf(">> Conteúdo: dist: %.2f cm, timestamp: %s\n", dist2, timestamp.c_str());
               Serial.print(time2);
               Serial.print(timestamp2);
               respostaRecebida2 = true;
-          
+              delay(100);
               break;
             }
           }
