@@ -8,8 +8,11 @@
 #include <ArduinoJson.h>
 #include <esp_sleep.h>
 struct tm data;
+
+//Pinos do sensor ultrassônico
 #define TRIG_PIN 5   // Pino TRIG do sensor ultrassonico
 #define ECHO_PIN 18  // Pino ECHO do sensor ultrassonico
+
 // PWM controlado por interrupção
 const int inputPin = 16;
 const int pwmPin = 17;  // PWM no pino 17
@@ -17,6 +20,10 @@ const int pwmChannel = 0;
 const int pwmFreq = 125000;
 const int pwmResolution = 8;
 
+//LED
+const int PINO_LED = 2; // PINO D15
+
+// Driver RF: (bps, RX, TX)
 RH_ASK rf_driver(1000, 4, 22);  // bit rate, RX, TX
 
 void TaskPWMControl(void *pvParameters) {
@@ -46,12 +53,22 @@ void setup() {
   ledcSetup(pwmChannel, pwmFreq, pwmResolution);
   ledcAttachPin(pwmPin, pwmChannel);
   ledcWrite(pwmChannel, 0);  // Começa desligado
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
-  pinMode(4, INPUT);
+
+  //Pino 22 como saída digital normal
   pinMode(22, OUTPUT);
   digitalWrite(22, LOW);
 
+  //sensor ultrassônico
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  
+  pinMode(4, INPUT);
+
+  //LED
+  pinMode(PINO_LED, OUTPUT); // Define o PINO do LED como saída
+  digitalWrite(PINO_LED, LOW);
+
+  // Inicializa RF
   if (!rf_driver.init()) {
     while (1) delay(10000);  // Loop infinito se falhar
   }
@@ -63,6 +80,7 @@ void setup() {
 
   ledcWrite(0, 127);  // 50% duty cycle
 
+  // Ajusta horário inicial
   timeval tv;
   tv.tv_sec = 1746791026;  // Timestamp fixo
   settimeofday(&tv, NULL);
@@ -156,6 +174,12 @@ void loop() {
 
       if (!respostaRecebida) {
         Serial.println("⚠️ Sem resposta correspondente");
+        for(int i = 0; i <4; i++){
+          digitalWrite(PINO_LED, HIGH); // Liga o LED
+          delay(500); // Espera 1 segundo
+          digitalWrite(PINO_LED, LOW); // Desliga o LED
+          delay(500);
+        }
       } else {
         Serial.println("✅ Resposta confirmada");
         delay(10000);
@@ -223,6 +247,12 @@ void loop() {
 
         if (!respostaRecebida2) {
           Serial.println("❌");
+          for(int i = 0; i <4; i++){
+            digitalWrite(PINO_LED, HIGH); // Liga o LED
+            delay(500); // Espera 1 segundo
+            digitalWrite(PINO_LED, LOW); // Desliga o LED
+            delay(500);
+          }
         } else {
           Serial.println("✔");
           esp_sleep_enable_timer_wakeup(10 * 1000000);  // 30 segundos em microssegundos
