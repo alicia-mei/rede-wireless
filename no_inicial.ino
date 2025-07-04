@@ -19,6 +19,9 @@ const int pwmChannel = 0;
 const int pwmFreq = 125000;
 const int pwmResolution = 8;
 
+//LED
+const int PINO_LED = 2; // PINO D15
+
 // Driver RF: (bps, RX, TX)
 RH_ASK rf_driver(1000, 4, 22);
 
@@ -63,6 +66,9 @@ void setup() {
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
 
+  //LED
+  pinMode(PINO_LED, OUTPUT); // Define o PINO do LED como saída
+
   // Inicializa RF
   if (!rf_driver.init()) {
     Serial.println("Falha ao inicializar o módulo RF");
@@ -84,6 +90,8 @@ void setup() {
   NULL,            // Handle (opcional)
   0                // Core (0 ou 1)
 ); 
+
+digitalWrite(PINO_LED, LOW);
 }
 
 String get_time_stamp() {
@@ -152,11 +160,17 @@ void loop() {
       }
     }
   }
-
+  if(respostaRecebida) Serial.println("✅");
+  else{
+    for(int i = 0; i <4; i++){
+    digitalWrite(PINO_LED, HIGH); // Liga o LED
+    delay(500); // Espera 1 segundo
+    digitalWrite(PINO_LED, LOW); // Desliga o LED
+    delay(500);
+    }
+  }
   Serial.println(respostaRecebida ? "✅" : "⚠️");
   esp_sleep_enable_timer_wakeup(30 * 1000000);  // 30 segundos em microssegundos
-          esp_light_sleep_start();
-  
-  
+  esp_light_sleep_start();
 
 }
