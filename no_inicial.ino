@@ -162,6 +162,7 @@ void loop() {
   }
   if(respostaRecebida) Serial.println("✅");
   else{
+    Serial.println("⚠️");
     for(int i = 0; i <4; i++){
     digitalWrite(PINO_LED, HIGH); // Liga o LED
     delay(500); // Espera 1 segundo
@@ -169,7 +170,7 @@ void loop() {
     delay(500);
     }
   }
-  Serial.println(respostaRecebida ? "✅" : "⚠️");
+  
   esp_sleep_enable_timer_wakeup(30 * 1000000);  // 30 segundos em microssegundos
   esp_light_sleep_start();
 
